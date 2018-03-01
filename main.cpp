@@ -3,6 +3,7 @@
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 #include "opencv2/objdetect.hpp"
+#include "opencv2/imgcodecs.hpp"
 
 #include <iostream>
 #include <unistd.h>
@@ -101,7 +102,61 @@ int main(int argc, char * argv[]){
         CV_Error(CV_StsError, error_message);
     }
     
+    int im_width = images[0].cols;
+    int im_height = images[0].rows;
     
+    //Ptr< FisherFaceRecognizer >     create (int num_components=0, double threshold=DBL_MAX)
+    Ptr<FaceRecognizer> model =  FisherFaceRecognizer::create();
+    model->train(images, labels);
     
+    CascadeClassifier haar_cascade;
+    haar_cascade.load("/Users/jacobpratt/Programming/OpenCV/opencv-3.3.1/data/haarcascades/haarcascade_frontalface_alt.xml");
+    
+    // Get a handle to the Video device:
+    VideoCapture cap(0);
+    if(!cap.isOpened()) {
+        cerr << "Capture Device ID cannot be opened." << endl;
+        return -1;
+    }
+    
+    Mat frame;
+    
+    for(;;){
+        cap>>frame;
+        Mat original = frame.clone();
+        Mat gray;
+        cvtColor(original, gray, CV_BGR2GRAY);
+        vector< Rect_<int> > faces;
+        haar_cascade.detectMultiScale(gray, faces);
+        for(int i = 0; i < faces.size(); i++) {
+            
+            Rect face_i = faces[i];
+            
+            Mat face = gray(face_i);
+            
+            Mat face_resized;
+            cv::resize(face, face_resized, Size(im_width, im_height), 1.0, 1.0, INTER_CUBIC);
+            
+            int prediction = model->predict(face_resized);
+            
+            rectangle(original, face_i, CV_RGB(0, 255,0), 1);
+            
+            string box_text = format("Prediction = %d", prediction);
+            
+            int pos_x = std::max(face_i.tl().x - 10, 0);
+            int pos_y = std::max(face_i.tl().y - 10, 0);
+            
+            putText(original, box_text, Point(pos_x, pos_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0,255,0), 2.0);
+        }
+        
+        imshow("face_recognizer", original);
+        
+        char key = (char) waitKey(20);
+        
+        if(key == 27)
+            break;
+    }
+    
+        
     return 0;
 }
